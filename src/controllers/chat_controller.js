@@ -1,7 +1,9 @@
 const chatModel=require('../models/chat-model');
 async function createChat(req,res) {
+    
     const {title}=req.body;
     const {user}=req;
+   
     const chat=await chatModel.create({
         user:user._id,
         title
