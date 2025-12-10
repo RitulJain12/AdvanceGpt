@@ -30,29 +30,32 @@ function initSocketServer(httpserver){
      
      socket.on("ai-message",async (msg)=>{
         const vectors= await GenerateVector(msg.message);
-    
+            
         const UserMsg= await MessageModel.create({
             chat:msg.chatId,
             user:socket.user._id,
             content:msg.message,
             role:'user'
          })
+         const Memory=await queryMemory({
+            queryVector:vectors,
+            limit:3,
+            metadata:{}
+           })
          await createMemory({
             vectors,
             msgId:UserMsg._id,
             metadata:{
                chat:msg.chatId,
                user:socket.user._id,
-               msg:msg.message
+               msg:msg.message,
+               role:"user"
             }
            })
-           const Memory=await queryMemory({
-            queryVector:vectors,
-            limit:3,
-            metadata:{}
-           })
-           console.log(Memory);
+         
+         
          const ChatHistory= (await MessageModel.find({chat:msg.chatId}).sort({createdAt:-1}).limit(5).lean()).reverse();
+
          const ShortMemory=ChatHistory.map(item=>{
             return{
                 role:item.role,
@@ -60,8 +63,14 @@ function initSocketServer(httpserver){
             }
 
          })
-        
-      
+          console.log(Memory);
+          Memory.forEach((obj) => {
+            ShortMemory.push({
+              role: obj.metadata.role,
+              parts: [{ text: obj.metadata.msg }]
+            });
+          });
+          
         const response=await GenerateResponse(ShortMemory);
       const Modelmsg=   await MessageModel.create({
             chat:msg.chatId,
@@ -77,7 +86,8 @@ function initSocketServer(httpserver){
             metadata:{
                chat:msg.chatId,
                user:socket.user._id,
-               msg:response
+               msg:response,
+               role:"model"
             }
            })
          socket.emit("ai-message-response",{response:response,
