@@ -1,7 +1,7 @@
 const {GoogleGenAI}=require('@google/genai');
 require('dotenv').config();
 
-const ai=new GoogleGenAI({apiKey:"AIzaSyCKG8PA5_jVqQRNAT9C5vgPrSBzegEpd94"});
+const ai=new GoogleGenAI({apiKey:process.env.API_K});
 
 async function GenerateResponse(ShortMemory) {
     const response=await ai.models.generateContent({

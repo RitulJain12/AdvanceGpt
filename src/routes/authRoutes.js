@@ -1,11 +1,11 @@
 const express=require('express');
 const router=express.Router();
-const{registerUser,loginUser}=require('../controllers/auth_controller');
+const{registerUser,loginUser,logOut}=require('../controllers/auth_controller');
 
 
 router.post('/register',registerUser);
 router.post('/login',loginUser);
-
+router.get('/logout',logOut);
 
 
 

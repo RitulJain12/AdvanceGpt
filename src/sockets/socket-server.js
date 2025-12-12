@@ -6,18 +6,24 @@ const {GenerateVector,GenerateResponse}=require('../services/ai-service');
 const MessageModel=require('../models/message');
 const { chat } = require('@pinecone-database/pinecone/dist/assistant/data/chat');
 function initSocketServer(httpserver){
- const io=new Server(httpserver,{})
-    const{createMemory,queryMemory}=require('../services/vectordb')
+ const io=new Server(httpserver,{
+   cors: {
+      origin: "http://localhost:5173",
+      methods: ["GET", "POST","PUT","PATCH","DELETE"],
+      credentials: true
+    }
+ })
+   const{createMemory,queryMemory}=require('../services/vectordb')
  io.use(async(socket,next)=>{
       const cookies=cookie.parse(socket.handshake.headers?.cookie||"");
       if(!cookies.token){
-          next(new Error("Unauthorized"));
+       next(new Error("Unauthorized"));
       }
       try{
         const decoded=jwt.verify(cookies.token,process.env.KEY);
          const user=await userModel.findById(decoded.id);
          socket.user=user;
-       
+       console.log(user._id);
          next();
       }
       catch(err){
@@ -27,7 +33,7 @@ function initSocketServer(httpserver){
  })
 
  io.on('connection',(socket)=>{
-     
+      console.log("aya");
      socket.on("ai-message",async (msg)=>{
         const vectors= await GenerateVector(msg.message);
             
@@ -35,12 +41,12 @@ function initSocketServer(httpserver){
             chat:msg.chatId,
             user:socket.user._id,
             content:msg.message,
-            role:'user'
+           
          })
          const Memory=await queryMemory({
             queryVector:vectors,
-            limit:3,
-            metadata:{}
+            limit:20,
+            metadata:{user:socket.user._id}
            })
          await createMemory({
             vectors,
@@ -63,15 +69,22 @@ function initSocketServer(httpserver){
             }
 
          })
-          console.log(Memory);
-          Memory.forEach((obj) => {
-            ShortMemory.push({
-              role: obj.metadata.role,
-              parts: [{ text: obj.metadata.msg }]
-            });
-          });
-          
-        const response=await GenerateResponse(ShortMemory);
+         console.log(Memory);
+      
+          const ltm=[
+            {
+               role:"user",
+               parts: [{ text: `
+                  
+                  these are some previous messages for the chat,use them to generate a response
+                  ${Memory.map(item=>item.metadata.msg).join("\n")}
+
+                  ` }]
+            }
+          ]
+
+          console.log(...ltm)
+        const response=await GenerateResponse([...ltm,...ShortMemory]);
       const Modelmsg=   await MessageModel.create({
             chat:msg.chatId,
             user:socket.user._id,
@@ -87,7 +100,7 @@ function initSocketServer(httpserver){
                chat:msg.chatId,
                user:socket.user._id,
                msg:response,
-               role:"model"
+   
             }
            })
          socket.emit("ai-message-response",{response:response,
