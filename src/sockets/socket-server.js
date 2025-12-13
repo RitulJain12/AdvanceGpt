@@ -33,22 +33,27 @@ function initSocketServer(httpserver){
  })
 
  io.on('connection',(socket)=>{
-      console.log("aya");
+  
      socket.on("ai-message",async (msg)=>{
-        const vectors= await GenerateVector(msg.message);
-            
-        const UserMsg= await MessageModel.create({
-            chat:msg.chatId,
-            user:socket.user._id,
-            content:msg.message,
-           
-         })
+   
+      const[UserMsg, vectors]=await Promise.all([
+        MessageModel.create({
+          chat:msg.chatId,
+          user:socket.user._id,
+          content:msg.message,
+         
+       }),
+       GenerateVector(msg.message)
+      ])
+      
+     
          const Memory=await queryMemory({
             queryVector:vectors,
             limit:20,
             metadata:{user:socket.user._id}
            })
-         await createMemory({
+         
+         await   createMemory({
             vectors,
             msgId:UserMsg._id,
             metadata:{
@@ -58,7 +63,6 @@ function initSocketServer(httpserver){
                role:"user"
             }
            })
-         
          
          const ChatHistory= (await MessageModel.find({chat:msg.chatId}).sort({createdAt:-1}).limit(5).lean()).reverse();
 
@@ -85,14 +89,18 @@ function initSocketServer(httpserver){
 
           console.log(...ltm)
         const response=await GenerateResponse([...ltm,...ShortMemory]);
-      const Modelmsg=   await MessageModel.create({
+        socket.emit("ai-message-response",{response:response,
+          chatId:msg.chatId});
+        const [Modelmsg,ResponseVectors]=await Promise.all([
+          MessageModel.create({
             chat:msg.chatId,
             user:socket.user._id,
             content:response,
             role:'model'
-         })
-         const ResponseVectors= await GenerateVector(response);
-       
+         }),
+         GenerateVector(response)
+        ])
+     
          await createMemory({
             vectors: ResponseVectors,
             msgId:Modelmsg._id,
@@ -103,9 +111,9 @@ function initSocketServer(httpserver){
    
             }
            })
-         socket.emit("ai-message-response",{response:response,
-            chatId:msg.chatId});
+        
      })
+
  })
 }
 
